@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iname"
+version = "0.1.0"
+description = "Internet Name — make filenames safe and consistent for the web"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    {name = "Neil Stoker"},
+]
+keywords = ["filename", "rename", "web", "sanitize", "cli", "unix"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Filesystems",
+    "Topic :: Utilities",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
+
+[project.scripts]
+iname = "iname.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/cadentdev/iname"
+Repository = "https://github.com/cadentdev/iname"
+Issues = "https://github.com/cadentdev/iname/issues"
+
+[tool.setuptools.packages.find]
+include = ["iname*"]
+
+[tool.ruff]
+target-version = "py39"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
