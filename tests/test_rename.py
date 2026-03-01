@@ -212,11 +212,12 @@ class TestDedup:
         assert f.exists()  # original unchanged
 
     def test_dedup_exhausted(self, tmp_path):
-        base = tmp_path / "test.txt"
-        base.write_text("base")
+        # Use a name that sanitizes to "test" but is distinct from "test.txt"
+        # to avoid case-insensitive samefile() on macOS/Windows
+        (tmp_path / "test.txt").write_text("base")
         for i in range(1, 100):
             (tmp_path / f"test-{i:02d}.txt").write_text(str(i))
-        f = tmp_path / "Test.txt"
+        f = tmp_path / "TEST!.txt"
         f.write_text("overflow")
         with pytest.raises(OSError, match="99 attempts"):
             rename_file(f)
