@@ -1,4 +1,4 @@
-"""Core rename logic — make filenames safe for the web.
+"""Core rename logic — make file and directory names safe for the web.
 
 Supports multiple naming styles:
 * web (default): lowercase, hyphens — URL-safe
@@ -6,9 +6,14 @@ Supports multiple naming styles:
 * kebab: lowercase, hyphens — converts underscores too
 * camel: camelCase — no separators
 
+Dots are kept in every style, so "archive.tar.gz" and "example.com.zip" are
+left alone. A dot outranks the separators next to it ("My Photo .v2" becomes
+"my-photo.v2").
+
 Ported from xplat (github.com/cadentdev/xplat).
 """
 
+import os
 import re
 import unicodedata
 from enum import Enum
@@ -17,7 +22,9 @@ from pathlib import Path
 NAME_MAX = 255  # bytes; the filename limit on every mainstream filesystem
 DEDUP_MAX = 99
 
-_SEPARATORS = "-_"
+_SEPARATORS = "-_."
+# A run of separators that contains a dot collapses to a single dot.
+_DOT_RUN = re.compile(r"[-_.]*\.[-_.]*")
 
 
 class Style(str, Enum):
@@ -31,9 +38,9 @@ class Style(str, Enum):
 
 # delimiter, characters converted to the delimiter, other characters kept as-is
 _DELIMITER_STYLES = {
-    Style.web: ("-", " .", "_"),
-    Style.snake: ("_", " .-", ""),
-    Style.kebab: ("-", " ._", ""),
+    Style.web: ("-", " ", "_."),
+    Style.snake: ("_", " -", "."),
+    Style.kebab: ("-", " _", "."),
 }
 
 
@@ -65,11 +72,11 @@ def _apply_delimiter_style(
 
 
 def _apply_camel(name: str) -> str:
-    """Camel style: remove separators, produce camelCase."""
+    """Camel style: remove separators, produce camelCase. Dots are kept."""
     words = [
         word
-        for part in re.split(r"[ .\-_]+", name)
-        if (word := "".join(c for c in part if c.isalnum()))
+        for part in re.split(r"[ \-_]+", name)
+        if (word := "".join(c for c in part if c.isalnum() or c == "."))
     ]
     if not words:
         return ""
@@ -92,28 +99,28 @@ def safe_stem(name: str, style: Style = Style.web, *, max_bytes: int = NAME_MAX)
         result = _apply_camel(normalized)
     else:
         result = _apply_delimiter_style(normalized, *_DELIMITER_STYLES[style])
-    return _truncate(result, max_bytes)
+    return _truncate(_DOT_RUN.sub(".", result), max_bytes)
 
 
 def _split_extension(name: str) -> tuple[str, str]:
     """Split "stem.ext" into ("stem", ".ext").
 
-    The extension is only recognised when it is purely alphanumeric. Anything
-    else ("photo.JPG (1)", "file.") is treated as part of the stem so that it
-    gets sanitized rather than passed through.
+    The extension is kept verbatim apart from lowercasing, so "photo.c++"
+    survives. It is only recognised when it contains no whitespace; something
+    like "photo.JPG (1)" is treated as all stem so that it gets sanitized.
     """
     stem, dot, ext = name.rpartition(".")
-    if dot and ext.isalnum():
+    if dot and ext and " " not in ext:
         return stem, "." + ext.lower()
     return name, ""
 
 
 def make_safe_path(orig_path: Path, style: Style = Style.web) -> Path:
-    """Create a new Path with safe filename in the same directory.
+    """Create a new Path with a safe name in the same directory.
 
     A leading dot is preserved so hidden files stay hidden.
 
-    Raises ValueError if the filename produces an empty stem.
+    Raises ValueError if the name produces an empty stem.
     """
     name = _normalize(orig_path.name)
     prefix = "." if name.startswith(".") else ""
@@ -142,25 +149,49 @@ def _dedup_path(path: Path) -> Path:
     raise OSError(f"Cannot find available name after {DEDUP_MAX} attempts: {path}")
 
 
-def rename_file(
+def _move_no_clobber(src: Path, dst: Path) -> None:
+    """Move src to dst, refusing to overwrite a dst that appeared meanwhile.
+
+    A hard link is atomic and fails if dst exists, closing the window between
+    the existence check and the move. Directories cannot be hard-linked, and
+    Windows rename already refuses to overwrite, so those use a plain rename.
+    So do filesystems without hard-link support.
+    """
+    if os.name == "nt" or src.is_dir():
+        src.rename(dst)
+        return
+    try:
+        os.link(src, dst)
+    except FileExistsError:
+        raise FileExistsError(f"Target appeared before rename, not overwriting: {dst}")
+    except OSError:
+        src.rename(dst)
+        return
+    os.unlink(src)
+
+
+def rename_path(
     orig_path: Path,
     dry_run: bool = False,
     style: Style = Style.web,
 ) -> Path:
-    """Rename a single file to be web-safe.
+    """Rename a single file or directory to be web-safe.
 
     Returns the new path (or original if already safe).
     Handles collisions with zero-padded dedup suffix (-01 to -99).
 
     Raises:
-        FileNotFoundError: If original path is not a file
-        OSError: If original path is a symlink, or dedup exhausted
-        ValueError: If filename produces empty stem
+        FileNotFoundError: If original path is not a file or directory
+        OSError: If original path is a symlink, the target appeared between
+            the collision check and the move, or dedup is exhausted
+        ValueError: If the path is "." or "..", or the name sanitizes to nothing
     """
+    if orig_path.name in ("", ".", ".."):
+        raise ValueError(f"Refusing to rename '.' or '..': {orig_path}")
     if orig_path.is_symlink():
         raise OSError(f"Refusing to operate on symlink: {orig_path}")
-    if not orig_path.is_file():
-        raise FileNotFoundError(f"Not a file: {orig_path}")
+    if not (orig_path.is_file() or orig_path.is_dir()):
+        raise FileNotFoundError(f"Not a file or directory: {orig_path}")
 
     new_path = make_safe_path(orig_path, style)
 
@@ -170,11 +201,18 @@ def rename_file(
         return orig_path
 
     # A case-only change on a case-insensitive filesystem "exists" but is the
-    # same file, so it needs no dedup.
-    if new_path.exists() and not orig_path.samefile(new_path):
+    # same file: no dedup, and a plain rename since a hard link would collide.
+    same_file = new_path.exists() and orig_path.samefile(new_path)
+    if new_path.exists() and not same_file:
         new_path = _dedup_path(new_path)
 
     if not dry_run:
-        orig_path.rename(new_path)
+        if same_file:
+            orig_path.rename(new_path)
+        else:
+            _move_no_clobber(orig_path, new_path)
 
     return new_path
+
+
+rename_file = rename_path  # backwards-compatible alias

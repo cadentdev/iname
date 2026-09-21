@@ -7,14 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Directories can be renamed, not just files. `rename_file` is now an alias of
+  `rename_path`.
+- `-0` / `--null`: NUL-separated paths on stdin and stdout, so filenames
+  containing newlines work with `find -print0` and `xargs -0`.
+
+### Changed
+
+- **Breaking:** dots inside a name are now kept in every style instead of
+  being converted to the delimiter, so `archive.tar.gz`, `example.com.zip` and
+  `app.min.js` are left alone and `My Photo.v2.JPG` becomes `my-photo.v2.jpg`
+  (previously `my-photo-v2.jpg`). A dot outranks adjacent separators:
+  `My Photo .v2` → `my-photo.v2`.
+- The extension is kept verbatim apart from lowercasing (`photo.C++` →
+  `photo.c++`). Only an extension containing whitespace is folded into the
+  stem and sanitized (`photo.JPG (1)` → `photo.jpg-1`).
+- Running with no argument and no piped stdin now prints usage and an error to
+  stderr, following the argparse convention, instead of help to stdout. The
+  exit code is still 2.
+- `.` and `..` are refused with a clear error instead of failing with a
+  confusing "empty stem" message.
+
 ### Fixed
 
 - Filenames with leading or trailing whitespace could not be renamed: the CLI
   stripped whitespace from the path before looking it up. Only the line ending
   is now removed from stdin input, and arguments are used verbatim.
-- An extension containing unsafe characters was passed through untouched, so
-  `photo.JPG (1)` became `photo.jpg (1)`. Only a purely alphanumeric extension
-  is now kept; anything else is folded into the stem and sanitized.
+- An extension containing whitespace was passed through untouched, so
+  `photo.JPG (1)` became `photo.jpg (1)`. It is now folded into the stem and
+  sanitized.
 - Hidden files lost their leading dot (`.htaccess` → `htaccess`). The dot is
   now preserved.
 - The same name produced different results depending on the filesystem's
@@ -30,6 +53,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`_foo_` → `_foo`). Separators are now stripped from both ends.
 - An empty string argument (`iname ""`) fell through to reading stdin instead
   of reporting an error.
+- A file created at the target path by another process between the collision
+  check and the rename was silently overwritten on POSIX. Files are now moved
+  with an atomic hard link and unlink, which fails instead of clobbering.
+  Directories, Windows and filesystems without hard links use a plain rename
+  (Windows already refuses to overwrite).
 
 ### Changed
 

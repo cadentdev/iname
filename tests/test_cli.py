@@ -11,10 +11,14 @@ from iname.cli import main
 
 
 class TestCliArgs:
-    def test_no_args_no_stdin_returns_2(self, monkeypatch):
-        """No file + interactive terminal → usage error (exit 2)."""
+    def test_no_args_no_stdin_returns_2(self, monkeypatch, capsys):
+        """No file + interactive terminal → usage error on stderr (exit 2)."""
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
         assert main([]) == 2
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert captured.err.startswith("usage:")
+        assert "iname: error:" in captured.err
 
     def test_version(self, capsys):
         with pytest.raises(SystemExit) as exc_info:
@@ -195,4 +199,60 @@ class TestCliWhitespaceInPaths:
 
     def test_empty_argument_is_an_error(self, capsys):
         assert main([""]) == 1
-        assert "Not a file" in capsys.readouterr().err
+        assert "Refusing to rename" in capsys.readouterr().err
+
+
+class TestCliNullSeparated:
+    """-0 / --null: NUL-separated input and output, for find -print0 / xargs -0."""
+
+    @staticmethod
+    def _null_stdin(monkeypatch, data: bytes):
+        monkeypatch.setattr("sys.stdin", io.TextIOWrapper(io.BytesIO(data)))
+
+    def test_reads_nul_separated_paths(self, tmp_path, capsys, monkeypatch):
+        f1 = tmp_path / "File One.txt"
+        f2 = tmp_path / "File Two.txt"
+        f1.write_text("1")
+        f2.write_text("2")
+        self._null_stdin(monkeypatch, f"{f1}\0{f2}\0".encode())
+        assert main(["-0"]) == 0
+        out = capsys.readouterr().out
+        assert out.endswith("\0")
+        names = [x.rsplit("/", 1)[-1] for x in out.split("\0") if x]
+        assert names == ["file-one.txt", "file-two.txt"]
+
+    def test_newline_in_filename(self, tmp_path, capsys, monkeypatch):
+        f = tmp_path / "Line\nBreak.txt"
+        f.write_text("content")
+        self._null_stdin(monkeypatch, f"{f}\0".encode())
+        assert main(["--null"]) == 0
+        assert (tmp_path / "line-break.txt").exists()
+        assert capsys.readouterr().out.rstrip("\0").endswith("line-break.txt")
+
+    def test_missing_trailing_nul_is_tolerated(self, tmp_path, capsys, monkeypatch):
+        f = tmp_path / "My File.txt"
+        f.write_text("content")
+        self._null_stdin(monkeypatch, f"{f}".encode())
+        assert main(["-0"]) == 0
+        assert (tmp_path / "my-file.txt").exists()
+
+    def test_single_argument_output_is_nul_terminated(self, tmp_path, capsys):
+        f = tmp_path / "My File.txt"
+        f.write_text("content")
+        assert main(["-0", str(f)]) == 0
+        out = capsys.readouterr().out
+        assert out.endswith("my-file.txt\0")
+        assert "\n" not in out
+
+
+class TestCliDirectory:
+    def test_rename_directory(self, tmp_path, capsys):
+        d = tmp_path / "My Folder"
+        d.mkdir()
+        assert main([str(d)]) == 0
+        assert capsys.readouterr().out.strip().endswith("my-folder")
+        assert (tmp_path / "my-folder").is_dir()
+
+    def test_missing_path_message(self, tmp_path, capsys):
+        assert main([str(tmp_path / "nope")]) == 1
+        assert "Not a file or directory" in capsys.readouterr().err
