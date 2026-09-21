@@ -31,6 +31,11 @@ The version lives only in `pyproject.toml`. `iname.__version__` reads it from
 installed package metadata. Never edit a version string in `iname/__init__.py`
 or in tests; tests compare against `iname.__version__`.
 
+After `poetry version`, run `poetry install` so the installed metadata matches.
+If `iname.__version__` still reports the old version, look for a stale
+`iname.egg-info/` directory in the repo root (left by an old setuptools
+editable install) and delete it; it shadows the real metadata.
+
 ## Git workflow
 
 Never commit directly to `main`. Every change, including docs and releases,
