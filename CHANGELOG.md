@@ -5,7 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-09-21
+
+### Removed
+
+- **Breaking:** dropped support for Python 3.9, which reached end of life in
+  October 2025. The minimum supported version is now Python 3.10.
 
 ### Added
 
@@ -13,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `rename_path`.
 - `-0` / `--null`: NUL-separated paths on stdin and stdout, so filenames
   containing newlines work with `find -print0` and `xargs -0`.
+- Python 3.14 to the supported versions and the CI test matrix.
+- Python 3.10 to the CI test matrix. It was listed as supported but never
+  actually tested.
 
 ### Changed
 
@@ -21,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `app.min.js` are left alone and `My Photo.v2.JPG` becomes `my-photo.v2.jpg`
   (previously `my-photo-v2.jpg`). A dot outranks adjacent separators:
   `My Photo .v2` → `my-photo.v2`.
+- **Breaking:** names are NFKD-normalized before sanitizing, so accented
+  letters consistently fold to ASCII (`Café.png` → `cafe.png`) and ligatures
+  and fullwidth characters fold to their plain forms. Previously the result
+  depended on whether the filesystem stored the name as NFC or NFD.
 - The extension is kept verbatim apart from lowercasing (`photo.C++` →
   `photo.c++`). Only an extension containing whitespace is folded into the
   stem and sanitized (`photo.JPG (1)` → `photo.jpg-1`).
@@ -29,6 +41,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exit code is still 2.
 - `.` and `..` are refused with a clear error instead of failing with a
   confusing "empty stem" message.
+- Bumped `actions/checkout` to v7 and `actions/setup-python` to v7. Both now run
+  on Node 24, clearing the Node 20 deprecation warning in CI.
+- Pinned development dependencies to compatible release ranges
+  (`pytest>=9.1,<10`, `pytest-cov>=7.1,<8`, `ruff>=0.16,<0.17`). Previously
+  unpinned, which let a new ruff release turn CI red with no change to the code.
+- `[tool.ruff] target-version` raised to `py310`.
+- Internal refactor of the rename module: the style table now states which
+  characters are converted and which are kept, truncation is a single byte
+  slice instead of a character-by-character loop, and `NAME_MAX` is a named
+  constant.
 
 ### Fixed
 
@@ -40,11 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sanitized.
 - Hidden files lost their leading dot (`.htaccess` → `htaccess`). The dot is
   now preserved.
-- The same name produced different results depending on the filesystem's
-  Unicode normalization form: NFD input (macOS) had its accents stripped while
-  NFC input (Linux) kept them. Names are now NFKD-normalized first, so accented
-  letters consistently fold to ASCII and ligatures and fullwidth characters
-  fold to their plain forms.
 - `camel` style capitalized letters after digits inside a word
   (`file 2nd edition` → `file2NdEdition`). Now `file2ndEdition`.
 - The dedup suffix could push a name past 255 bytes, which crashed with
@@ -58,38 +75,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with an atomic hard link and unlink, which fails instead of clobbering.
   Directories, Windows and filesystems without hard links use a plain rename
   (Windows already refuses to overwrite).
-
-### Changed
-
-- Internal refactor of the rename module: the style table now states which
-  characters are converted and which are kept, truncation is a single byte
-  slice instead of a character-by-character loop, and `NAME_MAX` is a named
-  constant.
-
-## [0.2.0] - 2026-09-21
-
-### Removed
-
-- **Breaking:** dropped support for Python 3.9, which reached end of life in
-  October 2025. The minimum supported version is now Python 3.10.
-
-### Added
-
-- Python 3.14 to the supported versions and the CI test matrix.
-- Python 3.10 to the CI test matrix. It was listed as supported but never
-  actually tested.
-
-### Changed
-
-- Bumped `actions/checkout` to v7 and `actions/setup-python` to v7. Both now run
-  on Node 24, clearing the Node 20 deprecation warning in CI.
-- Pinned development dependencies to compatible release ranges
-  (`pytest>=9.1,<10`, `pytest-cov>=7.1,<8`, `ruff>=0.16,<0.17`). Previously
-  unpinned, which let a new ruff release turn CI red with no change to the code.
-- `[tool.ruff] target-version` raised to `py310`.
-
-### Fixed
-
 - Two ruff violations that were failing CI on every job: a `subprocess.run` call
   without an explicit `check` argument (`PLW1510`) and an unsorted import block
   (`I001`).
@@ -116,6 +101,5 @@ the proven rename logic, distilled into a single-purpose Unix tool.
 - Exit codes: `0` success, `1` error, `2` usage error.
 - Zero runtime dependencies — standard library only.
 
-[Unreleased]: https://github.com/cadentdev/iname/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/cadentdev/iname/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cadentdev/iname/releases/tag/v0.1.0
