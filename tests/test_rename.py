@@ -4,7 +4,6 @@ import pytest
 
 from iname.rename import Style, make_safe_path, rename_file, safe_stem
 
-
 # --- safe_stem: style tests ---
 
 
