@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iname"
-version = "0.1.0"
+version = "0.2.0"
 description = "Internet Name — make filenames safe and consistent for the web"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name = "Neil Johnson"},
 ]
@@ -18,20 +18,20 @@ classifiers = [
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: System :: Filesystems",
     "Topic :: Utilities",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
-    "pytest-cov",
-    "ruff",
+    "pytest>=9.1,<10",
+    "pytest-cov>=7.1,<8",
+    "ruff>=0.16,<0.17",
 ]
 
 [project.scripts]
@@ -46,7 +46,7 @@ Issues = "https://github.com/cadentdev/iname/issues"
 include = ["iname*"]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

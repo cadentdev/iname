@@ -2,10 +2,10 @@
 
 [![CI](https://github.com/cadentdev/iname/actions/workflows/ci.yml/badge.svg)](https://github.com/cadentdev/iname/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/iname)](https://pypi.org/project/iname/)
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Make filenames safe and consistent for the web. One file at a time, composable with Unix pipes.
+Make file and directory names safe and consistent for the web. One path at a time, composable with Unix pipes.
 
 ## Install
 
@@ -30,6 +30,12 @@ iname "My Photo.jpeg" --style camel  # → myPhoto.jpeg
 # Batch rename with find
 find . -name "*.jpeg" | iname
 
+# Filenames with newlines or other odd characters: NUL-separated in and out
+find . -name "*.jpeg" -print0 | iname -0 | xargs -0 ls -la
+
+# Directories too (-depth renames children before their parents)
+find . -depth -type d | iname
+
 # Chain with other tools
 iname "My Photo.jpeg" | xargs ls -la
 
@@ -46,20 +52,35 @@ find . -name "*.JPEG" | iname --dry-run --verbose
 | `kebab` | `My_Photo (2).jpeg` | `my-photo-2.jpeg` |
 | `camel` | `My Photo (2).jpeg` | `myPhoto2.jpeg` |
 
+Dots are kept in every style, so `archive.tar.gz`, `example.com.zip` and
+`app.min.js` are left alone and `My Photo.v2.JPG` becomes `my-photo.v2.jpg`.
+A dot outranks the separators next to it: `My Photo .v2` → `my-photo.v2`.
+The extension is kept verbatim apart from lowercasing (`photo.C++` → `photo.c++`),
+unless it contains whitespace, in which case the whole name is sanitized.
+
 ## Behavior
 
 - **Stdout**: always prints the new path (enables piping and chaining)
 - **Stderr**: `--verbose` prints `old → new` mappings (doesn't interfere with pipes)
+- **`-0` / `--null`**: NUL-separated paths on stdin and stdout, for `find -print0` and `xargs -0`
+- **Directories**: renamed like files; rename children before parents (`find -depth`)
 - **Collisions**: auto-dedup with `-01`, `-02`, ... `-99` suffix
 - **Already safe**: prints path unchanged, exits 0
 - **Exit codes**: 0 = success, 1 = error, 2 = usage error
 
 ## Safety
 
-- Rejects symlinks
+- Rejects symlinks, and refuses to rename `.` or `..`
+- Never overwrites: files are moved with an atomic hard link, so a target that
+  appears between the collision check and the move is reported, not clobbered
+  (directories and filesystems without hard links fall back to a plain rename)
 - Strips null bytes
 - Normalizes Unicode whitespace (no-break spaces, narrow spaces)
-- Truncates to filesystem NAME_MAX (255 bytes)
+- Folds accented letters to ASCII (`Café.png` → `cafe.png`), so a name comes out
+  the same whether the filesystem stores it as NFC (Linux) or NFD (macOS)
+- Sanitizes an extension containing whitespace: `photo.JPG (1)` → `photo.jpg-1`
+- Keeps hidden files hidden (`.DS_Store` → `.ds_store`)
+- Truncates to filesystem NAME_MAX (255 bytes), including any dedup suffix
 - Case-insensitive filesystem aware
 
 ## Zero dependencies
