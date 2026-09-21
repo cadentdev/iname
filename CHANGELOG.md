@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-21
+
+Packaging-only release. No changes to naming behaviour or the CLI.
+
 ### Changed
 
 - Switched packaging to Poetry: `poetry-core` is the build backend, dev
@@ -112,6 +116,7 @@ the proven rename logic, distilled into a single-purpose Unix tool.
 - Exit codes: `0` success, `1` error, `2` usage error.
 - Zero runtime dependencies — standard library only.
 
-[Unreleased]: https://github.com/cadentdev/iname/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/cadentdev/iname/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/cadentdev/iname/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/cadentdev/iname/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cadentdev/iname/releases/tag/v0.1.0
