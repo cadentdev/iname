@@ -5,6 +5,7 @@ import sys
 
 import pytest
 
+from iname import __version__
 from iname.cli import main
 
 
@@ -18,7 +19,7 @@ class TestCliArgs:
         with pytest.raises(SystemExit) as exc_info:
             main(["--version"])
         assert exc_info.value.code == 0
-        assert "0.1.0" in capsys.readouterr().out
+        assert __version__ in capsys.readouterr().out
 
     def test_help(self, capsys):
         with pytest.raises(SystemExit) as exc_info:
@@ -156,4 +157,4 @@ class TestCliEntryPoint:
             check=False,
         )
         assert result.returncode == 0
-        assert "0.1.0" in result.stdout
+        assert __version__ in result.stdout
