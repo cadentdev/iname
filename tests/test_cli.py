@@ -1,5 +1,6 @@
 """Tests for the CLI interface."""
 
+import io
 import subprocess
 import sys
 
@@ -107,7 +108,7 @@ class TestCliStdin:
         f1.write_text("1")
         f2.write_text("2")
         stdin_data = f"{f1}\n{f2}\n"
-        monkeypatch.setattr("sys.stdin", __import__("io").StringIO(stdin_data))
+        monkeypatch.setattr("sys.stdin", io.StringIO(stdin_data))
         monkeypatch.setattr("sys.stdin.isatty", lambda: False)
         result = main([])
         assert result == 0
@@ -119,7 +120,7 @@ class TestCliStdin:
     def test_piped_with_style(self, tmp_path, capsys, monkeypatch):
         f = tmp_path / "My File.txt"
         f.write_text("content")
-        monkeypatch.setattr("sys.stdin", __import__("io").StringIO(f"{f}\n"))
+        monkeypatch.setattr("sys.stdin", io.StringIO(f"{f}\n"))
         monkeypatch.setattr("sys.stdin.isatty", lambda: False)
         result = main(["--style", "snake"])
         assert result == 0
@@ -128,7 +129,7 @@ class TestCliStdin:
     def test_piped_empty_lines_skipped(self, tmp_path, capsys, monkeypatch):
         f = tmp_path / "My File.txt"
         f.write_text("content")
-        monkeypatch.setattr("sys.stdin", __import__("io").StringIO(f"\n{f}\n\n"))
+        monkeypatch.setattr("sys.stdin", io.StringIO(f"\n{f}\n\n"))
         monkeypatch.setattr("sys.stdin.isatty", lambda: False)
         result = main([])
         assert result == 0
@@ -139,7 +140,7 @@ class TestCliStdin:
         f = tmp_path / "Good File.txt"
         f.write_text("content")
         stdin_data = f"/nonexistent/bad.txt\n{f}\n"
-        monkeypatch.setattr("sys.stdin", __import__("io").StringIO(stdin_data))
+        monkeypatch.setattr("sys.stdin", io.StringIO(stdin_data))
         monkeypatch.setattr("sys.stdin.isatty", lambda: False)
         result = main([])
         assert result == 1  # one error → exit 1
@@ -158,3 +159,40 @@ class TestCliEntryPoint:
         )
         assert result.returncode == 0
         assert __version__ in result.stdout
+
+
+class TestCliWhitespaceInPaths:
+    """Leading/trailing whitespace is part of the filename, not noise."""
+
+    def test_relative_path_with_leading_space(self, tmp_path, capsys, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / " Leading.txt").write_text("content")
+        assert main([" Leading.txt"]) == 0
+        assert (tmp_path / "leading.txt").exists()
+
+    def test_name_with_trailing_space(self, tmp_path, capsys):
+        f = tmp_path / "Trailing.txt "
+        f.write_text("content")
+        assert main([str(f)]) == 0
+        assert (tmp_path / "trailing.txt").exists()
+
+    def test_piped_name_with_trailing_space(self, tmp_path, capsys, monkeypatch):
+        f = tmp_path / "Trailing.txt "
+        f.write_text("content")
+        monkeypatch.setattr("sys.stdin", io.StringIO(f"{f}\n"))
+        monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+        assert main([]) == 0
+        assert (tmp_path / "trailing.txt").exists()
+
+    def test_piped_whitespace_only_lines_skipped(self, tmp_path, capsys, monkeypatch):
+        f = tmp_path / "My File.txt"
+        f.write_text("content")
+        monkeypatch.setattr("sys.stdin", io.StringIO(f"   \n{f}\n\t\n"))
+        monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+        assert main([]) == 0
+        lines = [x for x in capsys.readouterr().out.split("\n") if x]
+        assert len(lines) == 1
+
+    def test_empty_argument_is_an_error(self, capsys):
+        assert main([""]) == 1
+        assert "Not a file" in capsys.readouterr().err

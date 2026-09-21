@@ -5,6 +5,39 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Filenames with leading or trailing whitespace could not be renamed: the CLI
+  stripped whitespace from the path before looking it up. Only the line ending
+  is now removed from stdin input, and arguments are used verbatim.
+- An extension containing unsafe characters was passed through untouched, so
+  `photo.JPG (1)` became `photo.jpg (1)`. Only a purely alphanumeric extension
+  is now kept; anything else is folded into the stem and sanitized.
+- Hidden files lost their leading dot (`.htaccess` → `htaccess`). The dot is
+  now preserved.
+- The same name produced different results depending on the filesystem's
+  Unicode normalization form: NFD input (macOS) had its accents stripped while
+  NFC input (Linux) kept them. Names are now NFKD-normalized first, so accented
+  letters consistently fold to ASCII and ligatures and fullwidth characters
+  fold to their plain forms.
+- `camel` style capitalized letters after digits inside a word
+  (`file 2nd edition` → `file2NdEdition`). Now `file2ndEdition`.
+- The dedup suffix could push a name past 255 bytes, which crashed with
+  "File name too long". The stem is now trimmed to make room.
+- `web` style stripped a trailing underscore but kept a leading one
+  (`_foo_` → `_foo`). Separators are now stripped from both ends.
+- An empty string argument (`iname ""`) fell through to reading stdin instead
+  of reporting an error.
+
+### Changed
+
+- Internal refactor of the rename module: the style table now states which
+  characters are converted and which are kept, truncation is a single byte
+  slice instead of a character-by-character loop, and `NAME_MAX` is a named
+  constant.
+
 ## [0.2.0] - 2026-09-21
 
 ### Removed
@@ -55,5 +88,6 @@ the proven rename logic, distilled into a single-purpose Unix tool.
 - Exit codes: `0` success, `1` error, `2` usage error.
 - Zero runtime dependencies — standard library only.
 
+[Unreleased]: https://github.com/cadentdev/iname/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/cadentdev/iname/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cadentdev/iname/releases/tag/v0.1.0

@@ -35,6 +35,9 @@ class TestSafeStemStyles:
     def test_camel_single_word(self):
         assert safe_stem("Hello", style=Style.camel) == "hello"
 
+    def test_camel_all_special_chars(self):
+        assert safe_stem("!!!", style=Style.camel) == ""
+
 
 # --- safe_stem: edge cases ---
 
@@ -220,3 +223,102 @@ class TestDedup:
         f.write_text("overflow")
         with pytest.raises(OSError, match="99 attempts"):
             rename_file(f)
+
+
+# --- Unicode normalization ---
+
+
+class TestUnicodeNormalization:
+    def test_nfc_and_nfd_input_agree(self):
+        # macOS stores names as NFD, Linux as NFC — both must give the same result
+        assert safe_stem("café") == safe_stem("café")
+
+    def test_accents_folded_to_ascii(self):
+        assert safe_stem("Café Crème") == "cafe-creme"
+
+    def test_compatibility_forms_folded(self):
+        # "fi" ligature and fullwidth digit 2
+        assert safe_stem("ﬁle ２") == "file-2"
+
+    def test_non_latin_letters_preserved(self):
+        assert safe_stem("写真 2024") == "写真-2024"
+
+
+# --- camel: word capitalization ---
+
+
+class TestCamelCapitalization:
+    def test_digit_led_word_not_retitled(self):
+        assert safe_stem("file 2nd edition", style=Style.camel) == "file2ndEdition"
+
+    def test_inner_digits_not_retitled(self):
+        assert safe_stem("x abc123def", style=Style.camel) == "xAbc123def"
+
+
+# --- separators at the ends ---
+
+
+class TestEdgeSeparators:
+    def test_web_strips_underscores_at_both_ends(self):
+        assert safe_stem("_foo_") == "foo"
+
+    def test_web_strips_hyphens_at_both_ends(self):
+        assert safe_stem("-foo-") == "foo"
+
+
+# --- make_safe_path: extension handling ---
+
+
+class TestMakeSafePathExtension:
+    def test_unsafe_suffix_is_folded_into_stem(self, tmp_path):
+        assert make_safe_path(tmp_path / "photo.JPG (1)").name == "photo-jpg-1"
+
+    def test_unsafe_suffix_with_style(self, tmp_path):
+        orig = tmp_path / "photo.JPG (1)"
+        assert make_safe_path(orig, style=Style.snake).name == "photo_jpg_1"
+        assert make_safe_path(orig, style=Style.camel).name == "photoJpg1"
+
+    def test_trailing_whitespace_after_suffix(self, tmp_path):
+        assert make_safe_path(tmp_path / "file.TXT ").name == "file.txt"
+
+    def test_trailing_dot_dropped(self, tmp_path):
+        assert make_safe_path(tmp_path / "file.").name == "file"
+
+
+# --- make_safe_path: hidden files ---
+
+
+class TestMakeSafePathDotfiles:
+    def test_leading_dot_preserved(self, tmp_path):
+        assert make_safe_path(tmp_path / ".DS_Store").name == ".ds_store"
+
+    def test_dotfile_with_extension(self, tmp_path):
+        assert make_safe_path(tmp_path / ".env.Local").name == ".env.local"
+
+    def test_dotfile_with_spaces(self, tmp_path):
+        assert make_safe_path(tmp_path / ".Hidden File.txt").name == ".hidden-file.txt"
+
+    def test_dots_only_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="empty stem"):
+            make_safe_path(tmp_path / "...")
+
+    def test_dotfile_counts_toward_name_max(self, tmp_path):
+        safe = make_safe_path(tmp_path / ("." + "a" * 300 + ".txt"))
+        assert safe.name.startswith(".")
+        assert len(safe.name.encode("utf-8")) <= 255
+
+
+# --- dedup respects NAME_MAX ---
+
+
+class TestDedupNameMax:
+    def test_dedup_suffix_does_not_exceed_name_max(self, tmp_path):
+        (tmp_path / ("a" * 250 + ".txt")).write_text("existing")
+        f = tmp_path / (
+            "a" * 250 + "!.txt"
+        )  # 255 bytes; sanitizes to the existing name
+        f.write_text("new")
+        result = rename_file(f)
+        assert result.name == "a" * 248 + "-01.txt"
+        assert len(result.name.encode("utf-8")) <= 255
+        assert result.exists()

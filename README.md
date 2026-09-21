@@ -59,7 +59,12 @@ find . -name "*.JPEG" | iname --dry-run --verbose
 - Rejects symlinks
 - Strips null bytes
 - Normalizes Unicode whitespace (no-break spaces, narrow spaces)
-- Truncates to filesystem NAME_MAX (255 bytes)
+- Folds accented letters to ASCII (`Café.png` → `cafe.png`), so a name comes out
+  the same whether the filesystem stores it as NFC (Linux) or NFD (macOS)
+- Sanitizes the extension too: only a purely alphanumeric extension is kept, so
+  `photo.JPG (1)` → `photo-jpg-1`
+- Keeps hidden files hidden (`.DS_Store` → `.ds_store`)
+- Truncates to filesystem NAME_MAX (255 bytes), including any dedup suffix
 - Case-insensitive filesystem aware
 
 ## Zero dependencies

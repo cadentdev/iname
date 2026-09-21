@@ -2,31 +2,39 @@
 
 import argparse
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 from iname import __version__
 from iname.rename import Style, rename_file
 
 
-def _process_file(filepath: str, args) -> int:
+def _process_file(path: Path, *, style: Style, dry_run: bool, verbose: bool) -> int:
     """Process a single file. Returns 0 on success, 1 on error."""
-    filepath = filepath.strip()
-    if not filepath:
-        return 0
-
-    path = Path(filepath)
     try:
-        new_path = rename_file(path, dry_run=args.dry_run, style=Style(args.style))
-        print(new_path)
-        if args.verbose:
-            if str(new_path) != str(path):
-                print(f"{path} → {new_path}", file=sys.stderr)
-            else:
-                print(f"{path} (unchanged)", file=sys.stderr)
-        return 0
-    except (FileNotFoundError, OSError, ValueError) as e:
+        new_path = rename_file(path, dry_run=dry_run, style=style)
+    except (OSError, ValueError) as e:
         print(f"iname: {e}", file=sys.stderr)
         return 1
+    print(new_path)
+    if verbose:
+        if str(new_path) != str(path):
+            print(f"{path} → {new_path}", file=sys.stderr)
+        else:
+            print(f"{path} (unchanged)", file=sys.stderr)
+    return 0
+
+
+def _stdin_paths() -> Iterator[str]:
+    """Yield one path per non-blank stdin line.
+
+    Only the line ending is removed: other leading or trailing whitespace may
+    be part of the filename, which is exactly what iname exists to fix.
+    """
+    for line in sys.stdin:
+        line = line.rstrip("\r\n")
+        if line.strip():
+            yield line
 
 
 def main(argv=None):
@@ -38,9 +46,9 @@ def main(argv=None):
     parser.add_argument("file", nargs="?", help="file to rename")
     parser.add_argument(
         "--style",
-        choices=["web", "snake", "kebab", "camel"],
-        default="web",
-        help="naming style (default: web)",
+        choices=[s.value for s in Style],
+        default=Style.web.value,
+        help="naming style (default: %(default)s)",
     )
     parser.add_argument(
         "--dry-run",
@@ -59,19 +67,20 @@ def main(argv=None):
     )
 
     args = parser.parse_args(argv)
+    opts = {
+        "style": Style(args.style),
+        "dry_run": args.dry_run,
+        "verbose": args.verbose,
+    }
 
     # Single file argument
-    if args.file:
-        return _process_file(args.file, args)
+    if args.file is not None:
+        return _process_file(Path(args.file), **opts)
 
     # Piped stdin
     if not sys.stdin.isatty():
-        exit_code = 0
-        for line in sys.stdin:
-            result = _process_file(line, args)
-            if result != 0:
-                exit_code = 1
-        return exit_code
+        codes = [_process_file(Path(p), **opts) for p in _stdin_paths()]
+        return max(codes, default=0)
 
     # No file and no stdin — show help
     parser.print_help()
