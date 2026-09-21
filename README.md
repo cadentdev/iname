@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/cadentdev/iname/actions/workflows/ci.yml/badge.svg)](https://github.com/cadentdev/iname/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/iname)](https://pypi.org/project/iname/)
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Make filenames safe and consistent for the web. One file at a time, composable with Unix pipes.
