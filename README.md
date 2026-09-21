@@ -89,9 +89,12 @@ iname uses only the Python standard library. No runtime dependencies.
 
 ## Development
 
+Requires [Poetry](https://python-poetry.org/).
+
 ```bash
-pip install -e '.[dev]'
-pytest --cov=iname --cov-report=term-missing
+poetry install
+poetry run pytest --cov=iname --cov-report=term-missing
+poetry run ruff check .
 ```
 
 ## Origin
