@@ -3,6 +3,7 @@
 import io
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -218,9 +219,12 @@ class TestCliNullSeparated:
         assert main(["-0"]) == 0
         out = capsys.readouterr().out
         assert out.endswith("\0")
-        names = [x.rsplit("/", 1)[-1] for x in out.split("\0") if x]
+        names = [Path(x).name for x in out.split("\0") if x]
         assert names == ["file-one.txt", "file-two.txt"]
 
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="Windows forbids newlines in filenames"
+    )
     def test_newline_in_filename(self, tmp_path, capsys, monkeypatch):
         f = tmp_path / "Line\nBreak.txt"
         f.write_text("content")
